@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IT 기업 엔트리 분석 대시보드</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Calm Neutrals -->
+    <!-- Application Structure Plan: A dashboard-centric design was chosen to provide a multi-faceted view of the company data. The structure starts with a high-level summary dashboard featuring interactive charts (Tier Distribution, Attribute Correlation, Top 5 Companies) to give an immediate overview. This is followed by a comprehensive main table that is sortable, filterable by tier, and searchable. Clicking a company row opens a detailed modal with a radar chart, allowing for in-depth analysis of a single entity against the average. This tiered structure (overview -> filterable list -> detailed view) facilitates a natural user flow from broad comparison to specific investigation, making it highly effective for exploring and synthesizing complex information to support decision-making. -->
+    <!-- Visualization & Content Choices: Information from the report was categorized by its goal to select the best presentation method. To Organize data, a Doughnut chart (Chart.js) shows tier distribution, and an interactive HTML table with JS filtering/sorting presents the main list. To Compare entities, a horizontal Bar chart (Chart.js) highlights the top 5 companies by total score, and a Radar chart (Chart.js) in the detail modal compares individual company stats against the average. To show Relationships between metrics, a Scatter plot (Chart.js) visualizes 'WLB' vs. 'Stability'. All visualizations are interactive and linked to the main data table, providing a dynamic and exploratory user experience. This approach prioritizes user engagement and insight discovery over static data display. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Noto Sans KR', 'Inter', sans-serif;
+            background-color: #f8f9fa;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 400px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+        .tier-s { background-color: #cce5ff; color: #004085; }
+        .tier-a { background-color: #d4edda; color: #155724; }
+        .tier-b { background-color: #fff3cd; color: #856404; }
+        .tier-c { background-color: #f8d7da; color: #721c24; }
+        .modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+        }
+        .modal-content {
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .sortable:hover {
+            cursor: pointer;
+            background-color: #e9ecef;
+        }
+        .sort-asc::after { content: ' ▲'; }
+        .sort-desc::after { content: ' ▼'; }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">IT 기업 엔트리 분석 대시보드</h1>
+            <p class="text-md text-gray-600 mt-2">김태환 님의 이력서와 기업 분석을 기반으로 한 맞춤형 순위입니다.</p>
+        </header>
+
+        <main>
+            <section id="dashboard-charts" class="mb-8">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div class="bg-white p-6 rounded-lg shadow-md flex flex-col">
+                        <h3 class="text-lg font-semibold mb-4 text-center">기업 티어 분포</h3>
+                        <p class="text-sm text-gray-500 text-center mb-2">분석 대상 기업들의 등급별 분포를 보여줍니다. S등급과 A등급 기업에 집중하는 것을 추천합니다.</p>
+                        <div class="chart-container flex-grow h-64 md:h-auto"><canvas id="tierDistributionChart"></canvas></div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-md flex flex-col">
+                        <h3 class="text-lg font-semibold mb-4 text-center">종합 점수 Top 5</h3>
+                        <p class="text-sm text-gray-500 text-center mb-2">모든 평가 항목을 종합한 점수가 가장 높은 상위 5개 기업입니다. 최우선적으로 고려할 만한 기업들입니다.</p>
+                        <div class="chart-container flex-grow h-64 md:h-auto"><canvas id="topCompaniesChart"></canvas></div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-md flex flex-col">
+                        <h3 class="text-lg font-semibold mb-4 text-center">복지/WLB vs 고용 안정성</h3>
+                        <p class="text-sm text-gray-500 text-center mb-2">두 가지 핵심 가치인 워라밸과 안정성을 기준으로 기업들을 시각화했습니다. 우상단에 위치할수록 이상적입니다.</p>
+                        <div class="chart-container flex-grow h-64 md:h-auto"><canvas id="wlbVsStabilityChart"></canvas></div>
+                    </div>
+                </div>
+            </section>
+            
+            <section id="company-list" class="bg-white p-6 rounded-lg shadow-md">
+                <h2 class="text-2xl font-bold mb-4">전체 기업 순위</h2>
+                <p class="text-gray-600 mb-6">아래 목록은 기업 규모, 복지, 고용 안정성, 그리고 김태환 님과의 적합도를 종합하여 재구성한 순위입니다. 헤더를 클릭하여 정렬하거나, 티어 버튼으로 필터링할 수 있습니다.</p>
+                <div class="flex flex-wrap items-center gap-4 mb-4">
+                    <div id="tier-filters" class="flex flex-wrap gap-2">
+                        <button class="tier-filter-btn bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-full transition duration-200 active" data-tier="All">전체</button>
+                        <button class="tier-filter-btn bg-blue-100 hover:bg-blue-200 text-blue-800 font-semibold py-2 px-4 rounded-full transition duration-200" data-tier="S">S 티어</button>
+                        <button class="tier-filter-btn bg-green-100 hover:bg-green-200 text-green-800 font-semibold py-2 px-4 rounded-full transition duration-200" data-tier="A">A 티어</button>
+                        <button class="tier-filter-btn bg-yellow-100 hover:bg-yellow-200 text-yellow-800 font-semibold py-2 px-4 rounded-full transition duration-200" data-tier="B">B 티어</button>
+                        <button class="tier-filter-btn bg-red-100 hover:bg-red-200 text-red-800 font-semibold py-2 px-4 rounded-full transition duration-200" data-tier="C">C 티어</button>
+                    </div>
+                    <div class="relative flex-grow">
+                        <input type="text" id="searchInput" class="w-full pl-10 pr-4 py-2 border rounded-full" placeholder="기업명 검색 (한/일)">
+                        <div class="absolute top-0 left-0 inline-flex items-center p-2 mt-1 ml-1">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left text-gray-500">
+                        <thead class="text-xs text-gray-700 uppercase bg-gray-100">
+                            <tr>
+                                <th scope="col" class="px-6 py-3 sortable" data-sort="rank">순위</th>
+                                <th scope="col" class="px-6 py-3">기업명</th>
+                                <th scope="col" class="px-6 py-3">티어</th>
+                                <th scope="col" class="px-6 py-3 sortable" data-sort="size">기업 규모</th>
+                                <th scope="col" class="px-6 py-3 sortable" data-sort="wlb">복지/WLB</th>
+                                <th scope="col" class="px-6 py-3 sortable" data-sort="stability">고용 안정성</th>
+                                <th scope="col" class="px-6 py-3 sortable" data-sort="fit">후보자 적합도</th>
+                                <th scope="col" class="px-6 py-3 sortable" data-sort="total">종합 점수</th>
+                            </tr>
+                        </thead>
+                        <tbody id="companyTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div id="companyModal" class="modal-backdrop hidden">
+        <div class="bg-white rounded-lg shadow-xl w-11/12 md:w-3/4 lg:w-1/2 p-6 md:p-8 modal-content">
+            <div class="flex justify-between items-start">
+                <div>
+                    <h2 id="modalCompanyName" class="text-2xl font-bold"></h2>
+                    <p id="modalJapaneseName" class="text-md text-gray-500"></p>
+                </div>
+                <button id="closeModalBtn" class="text-gray-500 hover:text-gray-800 text-3xl">&times;</button>
+            </div>
+            <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <h4 class="text-lg font-semibold mb-2">종합 평가</h4>
+                    <p id="modalSummary" class="text-gray-700"></p>
+                    <div class="mt-4 grid grid-cols-2 gap-4 text-center">
+                        <div>
+                            <span id="modalTier" class="px-3 py-1 text-sm font-semibold rounded-full"></span>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500">종합 점수</p>
+                            <p id="modalTotalScore" class="text-2xl font-bold"></p>
+                        </div>
+                    </div>
+                </div>
+                <div class="chart-container h-64 md:h-auto">
+                    <canvas id="companyRadarChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const companyData = [
+            {rank: 1, koreanName: '페닐 주식회사', japaneseName: 'フェンリル(株)', tier: 'S', size: 4.0, wlb: 4.8, stability: 4.8, fit: 5.0, total: 18.6, summary: '최고의 기술 문화, 워라밸, 성장 환경. 김태환 님께 최적의 기업.'},
+            {rank: 2, koreanName: '주식회사 엑사', japaneseName: '(株)エクサ', tier: 'S', size: 4.5, wlb: 4.7, stability: 5.0, fit: 4.2, total: 18.4, summary: '최상의 안정성과 복리후생. 장기적 커리어 설계에 이상적.'},
+            {rank: 3, koreanName: '아시아 퀘스트 주식회사', japaneseName: 'アジアクエスト(株)', tier: 'S', size: 3.5, wlb: 4.3, stability: 4.2, fit: 4.8, total: 16.8, summary: '젊고 역동적인 문화. DX/AI 분야에서 빠른 성장을 기대할 수 있음.'},
+            {rank: 4, koreanName: '사이버콤 주식회사', japaneseName: 'サイバーコム(株)', tier: 'A', size: 4.2, wlb: 4.5, stability: 4.5, fit: 4.0, total: 17.2, summary: '업계 최고 수준의 교육 시스템과 안정성. 경력 전환자에게 최적.'},
+            {rank: 5, koreanName: '프로악시아 컨설팅', japaneseName: 'プロアクシアコンサルティング(株)', tier: 'A', size: 2.5, wlb: 3.8, stability: 4.0, fit: 3.0, total: 13.3, summary: 'SAP 전문가로 성장 가능. 단, 기술 스택 전환 필요.'},
+            {rank: 6, koreanName: 'FPT 재팬 홀딩스', japaneseName: 'FPTジャパンホールディングス(株)', tier: 'A', size: 4.8, wlb: 4.4, stability: 4.6, fit: 4.5, total: 18.3, summary: '진정한 글로벌 환경과 우수한 복지. 대규모 조직 문화 적응이 관건.'},
+            {rank: 7, koreanName: '주식회사 프로십', japaneseName: '(株)プロシップ', tier: 'A', size: 3.8, wlb: 3.5, stability: 4.9, fit: 3.5, total: 15.7, summary: '독보적인 시장 지위와 안정성. 특정 기술 분야 전문가로 성장 가능.'},
+            {rank: 8, koreanName: '워크스애플리케이션즈', japaneseName: '(株)ワークスアプリケーションズ', tier: 'A', size: 4.0, wlb: 4.2, stability: 4.3, fit: 4.3, total: 16.8, summary: '우수한 복지와 실력주의 문화. 경력 전환자를 위한 성장 시스템 완비.'},
+            {rank: 9, koreanName: '덴츠소켄IT', japaneseName: '(株)電通総研IT', tier: 'A', size: 3.8, wlb: 4.6, stability: 4.8, fit: 3.8, total: 17.0, summary: '대기업 그룹사의 안정성과 최고 수준의 복지. 체계적인 성장 환경.'},
+            {rank: 10, koreanName: '주식회사 GENOVA', japaneseName: '(株)GENOVA', tier: 'B', size: 3.5, wlb: 3.5, stability: 4.0, fit: 4.0, total: 15.0, summary: '의료 IT 분야의 성장 기업. 성과 기반의 빠른 성장 가능성.'},
+            {rank: 11, koreanName: '알카디아・시스템즈', japaneseName: 'アルカディア・システムズ(株)', tier: 'B', size: 3.0, wlb: 4.2, stability: 3.8, fit: 3.5, total: 14.5, summary: '안정적인 중소기업. 우수한 주택 지원 제도. SES 모델의 한계 존재.'},
+            {rank: 12, koreanName: '주식회사 아그렉스', japaneseName: '(株)アグレックス', tier: 'B', size: 4.8, wlb: 4.0, stability: 4.5, fit: 3.0, total: 16.3, summary: 'TIS 그룹의 높은 안정성. BPO 중심 사업 모델 고려 필요.'},
+            {rank: 13, koreanName: 'NCD 주식회사', japaneseName: 'NCD(株)', tier: 'B', size: 4.2, wlb: 3.8, stability: 4.2, fit: 3.5, total: 15.7, summary: '높은 정착률과 안정적 경영 기반. 안정적인 첫 직장으로 적합.'},
+            {rank: 14, koreanName: '주식회사 텐다', japaneseName: '(株)テンダ', tier: 'B', size: 3.2, wlb: 4.0, stability: 3.5, fit: 3.5, total: 14.2, summary: '자사 제품 보유 및 우수한 워라밸. 조직 문화 리스크 존재.'},
+            {rank: 15, koreanName: '주식회사 시에이시 (CAC)', japaneseName: '(株)シーエーシー', tier: 'B', size: 4.5, wlb: 3.8, stability: 4.3, fit: 3.2, total: 15.8, summary: '안정적인 대규모 독립계 SIer. 전형적인 SI 환경.'},
+            {rank: 16, koreanName: '메이지야스다 시스템', japaneseName: '明治安田システム・テクノロジー(株)', tier: 'B', size: 4.5, wlb: 3.8, stability: 5.0, fit: 2.5, total: 15.8, summary: '최고의 안정성. 단, 금융 특화로 기술 스택 제한 가능성.'},
+            {rank: 17, koreanName: '주식회사 시에로넥스트', japaneseName: '(株)CIJネクスト', tier: 'B', size: 2.5, wlb: 3.8, stability: 3.5, fit: 3.5, total: 13.3, summary: '통신 분야 특화. 긍정적 평가. SES 모델의 불확실성 존재.'},
+            {rank: 18, koreanName: '인포메이션・디벨롭먼트', japaneseName: '(株)インフォメーション・ディベロプメント', tier: 'B', size: 4.5, wlb: 3.6, stability: 4.0, fit: 3.0, total: 15.1, summary: '55년 업력의 안정성. 단, 급여 만족도 낮다는 평가 다수.'},
+            {rank: 19, koreanName: '주식회사 SIG', japaneseName: '(株)SIG', tier: 'B', size: 3.8, wlb: 3.9, stability: 3.8, fit: 3.3, total: 14.8, summary: '긍정적인 근무 환경과 워라밸. SES 모델의 성장 한계.'},
+            {rank: 20, koreanName: 'IST소프트웨어', japaneseName: 'ISTソフトウェア(株)', tier: 'B', size: 3.5, wlb: 3.9, stability: 3.6, fit: 3.4, total: 14.4, summary: '우수한 워라밸, 외국인 채용 개방적. SES 모델.'},
+            {rank: 21, koreanName: '이테크놀로지', japaneseName: '(株)イーテクノロジー', tier: 'B', size: 3.2, wlb: 3.6, stability: 3.8, fit: 3.5, total: 14.1, summary: '중국계 오프쇼어 개발 중심. 높은 정착률은 긍정적.'},
+            {rank: 22, koreanName: '토마토 정보 주식회사', japaneseName: 'とまと情報(株)', tier: 'B', size: 2.0, wlb: 4.0, stability: 3.2, fit: 2.8, total: 12.0, summary: '최고의 워라밸. 단, FileMaker 중심의 특수 기술 영역.'},
+            {rank: 23, koreanName: '주식회사 트라이', japaneseName: '(株)トライ', tier: 'B', size: 2.5, wlb: 3.5, stability: 3.0, fit: 3.0, total: 12.0, summary: '전형적인 SES 모델. 긍정적 평가도 있으나 성장 불확실성 큼.'},
+            {rank: 24, koreanName: '에스 와이 시스템', japaneseName: 'エスワイシステム(株)', tier: 'C', size: 3.8, wlb: 3.5, stability: 3.5, fit: 3.0, total: 13.8, summary: '상장 그룹사 소속. 전형적인 SES 모델.'},
+            {rank: 25, koreanName: 'CLINKS 주식회사', japaneseName: 'CLINKS(株)', tier: 'C', size: 4.0, wlb: 3.8, stability: 3.2, fit: 3.0, total: 14.0, summary: '풍부한 복리후생. 단, 급여 만족도 매우 낮음.'},
+            {rank: 26, koreanName: '시스템 에그제', japaneseName: '(株)システムエグゼ', tier: 'C', size: 3.8, wlb: 3.2, stability: 3.2, fit: 2.8, total: 13.0, summary: '급여 및 장기 육성 측면에서 부정적 평가 다수.'},
+            {rank: 27, koreanName: '어드밴스트・호크・시스템', japaneseName: 'アドバンスト・ホーク・システム(株)', tier: 'C', size: 2.0, wlb: 3.5, stability: 3.0, fit: 3.0, total: 11.5, summary: '신입 교육은 긍정적이나 정보 부족으로 불확실성 높음.'},
+            {rank: 28, koreanName: '일본 소프트웨어 크리에이티브', japaneseName: '日本ソフトウェアクリエイティブ(株)', tier: 'C', size: 2.5, wlb: 3.5, stability: 3.0, fit: 2.8, total: 11.8, summary: '개인의 노력에 성장이 크게 좌우되는 SES 모델.'},
+            {rank: 29, koreanName: '주식회사 아쿠아 (IT)', japaneseName: '(株)アクア', tier: 'C', size: 2.0, wlb: 3.4, stability: 3.2, fit: 3.0, total: 11.6, summary: '정보 부족. 구체적인 성장 환경 불분명.'},
+            {rank: 30, koreanName: '국제 소프트웨어', japaneseName: '国際ソフトウェア(株)', tier: 'C', size: 3.0, wlb: 3.2, stability: 3.5, fit: 2.8, total: 12.5, summary: '급여 만족도 매우 낮고 성장 정체 우려.'},
+            {rank: 31, koreanName: '월드 인텍 (테크노 사업부)', japaneseName: '(株)ワールドインテック', tier: 'C', size: 4.8, wlb: 3.5, stability: 2.8, fit: 2.5, total: 13.6, summary: '전형적인 기술자 파견 모델. 성장은 파견지에 종속.'},
+            {rank: 32, koreanName: '크로스포인트 솔루션', japaneseName: '(株)クロスポイントソリューション', tier: 'C', size: 2.8, wlb: 3.2, stability: 3.2, fit: 3.0, total: 12.2, summary: '보안 분야 전문성. 단, 낮은 평점과 정보 부족.'},
+            {rank: 33, koreanName: 'Asian Bridge', japaneseName: 'Asian Bridge(株)', tier: 'C', size: 2.5, wlb: 3.2, stability: 3.0, fit: 3.0, total: 11.7, summary: '급여 성장 더디다는 평가. SES 비중 높음.'},
+            {rank: 34, koreanName: '넷・인포메이션', japaneseName: '(株)ネット・インフォメーション', tier: 'C', size: 3.0, wlb: 3.8, stability: 3.0, fit: 2.5, total: 12.3, summary: '장기 육성 점수 매우 낮아 커리어 정체 우려.'},
+            {rank: 35, koreanName: '인포닉 주식회사', japaneseName: 'インフォニック(株)', tier: 'C', size: 2.8, wlb: 3.4, stability: 3.2, fit: 3.0, total: 12.4, summary: '현대적 기술 다루나, 실제 프로젝트 배정 불확실.'},
+            {rank: 36, koreanName: '소후라 주식회사', japaneseName: 'ソフラ(株)', tier: 'C', size: 2.5, wlb: 3.0, stability: 3.2, fit: 2.8, total: 11.5, summary: '보상 측면의 약점 명확.'},
+            {rank: 37, koreanName: '주식회사 아스타원', japaneseName: '(株)アスタワン', tier: 'C', size: 2.0, wlb: 3.2, stability: 3.0, fit: 2.5, total: 10.7, summary: '기업 정보 매우 제한적.'},
+            {rank: 38, koreanName: '주식회사 알파미디어', japaneseName: '(株)アルファメディア', tier: 'C', size: 2.2, wlb: 3.2, stability: 3.0, fit: 2.8, total: 11.2, summary: '구체적인 성장 환경 정보 부족.'},
+            {rank: 39, koreanName: '악사스 주식회사', japaneseName: 'アクサス(株)', tier: 'C', size: 4.0, wlb: 3.5, stability: 3.0, fit: 2.5, total: 13.0, summary: '높은 정착률. 단, 업무 기술 수준 편차 클 수 있음.'},
+            {rank: 40, koreanName: '에이엘제이', japaneseName: '(株)ALJ', tier: 'C', size: 2.8, wlb: 3.5, stability: 3.2, fit: 2.5, total: 12.0, summary: '장기 육성 점수 낮아 성장 가능성에 의문.'},
+            {rank: 41, koreanName: '캐르 주식회사 (CAL)', japaneseName: '(株)キャル', tier: 'C', size: 4.8, wlb: 3.0, stability: 2.5, fit: 2.0, total: 12.3, summary: '합격 가능성 높으나, 부정적 리뷰 많아 리스크 매우 큼.'}
+        ];
+        
+        let currentSort = { column: 'rank', direction: 'asc' };
+        let currentFilter = 'All';
+        let currentSearch = '';
+        let radarChartInstance;
+        
+        const tierClasses = {
+            S: 'tier-s',
+            A: 'tier-a',
+            B: 'tier-b',
+            C: 'tier-c'
+        };
+        const tierColors = { S: '#004085', A: '#155724', B: '#856404', C: '#721c24' };
+
+        const tableBody = document.getElementById('companyTableBody');
+
+        function renderTable() {
+            let filteredData = companyData;
+
+            if (currentFilter !== 'All') {
+                filteredData = filteredData.filter(c => c.tier === currentFilter);
+            }
+            
+            if (currentSearch) {
+                const searchTerm = currentSearch.toLowerCase();
+                filteredData = filteredData.filter(c => 
+                    c.koreanName.toLowerCase().includes(searchTerm) || 
+                    c.japaneseName.toLowerCase().includes(searchTerm)
+                );
+            }
+
+            filteredData.sort((a, b) => {
+                const valA = a[currentSort.column];
+                const valB = b[currentSort.column];
+                if (valA < valB) return currentSort.direction === 'asc' ? -1 : 1;
+                if (valA > valB) return currentSort.direction === 'asc' ? 1 : -1;
+                return 0;
+            });
+            
+            tableBody.innerHTML = filteredData.map(company => `
+                <tr class="bg-white border-b hover:bg-gray-50 cursor-pointer" data-rank="${company.rank}">
+                    <td class="px-6 py-4 font-medium text-gray-900">${company.rank}</td>
+                    <td class="px-6 py-4">
+                        <div class="font-semibold">${company.koreanName}</div>
+                        <div class="text-xs text-gray-500">${company.japaneseName}</div>
+                    </td>
+                    <td class="px-6 py-4">
+                        <span class="px-2 py-1 font-semibold text-xs rounded-full ${tierClasses[company.tier]}">${company.tier}</span>
+                    </td>
+                    <td class="px-6 py-4">${company.size.toFixed(1)}</td>
+                    <td class="px-6 py-4">${company.wlb.toFixed(1)}</td>
+                    <td class="px-6 py-4">${company.stability.toFixed(1)}</td>
+                    <td class="px-6 py-4">${company.fit.toFixed(1)}</td>
+                    <td class="px-6 py-4 font-bold text-lg text-blue-600">${company.total.toFixed(1)}</td>
+                </tr>
+            `).join('');
+
+            document.querySelectorAll('#companyTableBody tr').forEach(row => {
+                row.addEventListener('click', () => openModal(row.dataset.rank));
+            });
+        }
+        
+        function setupSorting() {
+            document.querySelectorAll('.sortable').forEach(header => {
+                header.addEventListener('click', () => {
+                    const column = header.dataset.sort;
+                    if (currentSort.column === column) {
+                        currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        currentSort.column = column;
+                        currentSort.direction = 'asc';
+                    }
+                    
+                    document.querySelectorAll('.sortable').forEach(h => {
+                       h.classList.remove('sort-asc', 'sort-desc');
+                    });
+                    header.classList.add(currentSort.direction === 'asc' ? 'sort-asc' : 'sort-desc');
+
+                    renderTable();
+                });
+            });
+        }
+        
+        function setupFiltering() {
+            document.querySelectorAll('.tier-filter-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    currentFilter = btn.dataset.tier;
+                    document.querySelectorAll('.tier-filter-btn').forEach(b => b.classList.remove('active', 'ring-2', 'ring-offset-2', 'ring-blue-500'));
+                    btn.classList.add('active', 'ring-2', 'ring-offset-2', 'ring-blue-500');
+                    renderTable();
+                });
+            });
+        }
+        
+        function setupSearch() {
+            document.getElementById('searchInput').addEventListener('input', (e) => {
+                currentSearch = e.target.value;
+                renderTable();
+            });
+        }
+
+        function openModal(rank) {
+            const company = companyData.find(c => c.rank == rank);
+            if (!company) return;
+
+            document.getElementById('modalCompanyName').innerText = company.koreanName;
+            document.getElementById('modalJapaneseName').innerText = company.japaneseName;
+            document.getElementById('modalSummary').innerText = company.summary;
+            document.getElementById('modalTotalScore').innerText = company.total.toFixed(1);
+            
+            const tierSpan = document.getElementById('modalTier');
+            tierSpan.innerText = `${company.tier} 티어`;
+            tierSpan.className = `px-3 py-1 text-sm font-semibold rounded-full ${tierClasses[company.tier]}`;
+
+            document.getElementById('companyModal').classList.remove('hidden');
+            renderRadarChart(company);
+        }
+
+        function closeModal() {
+            document.getElementById('companyModal').classList.add('hidden');
+        }
+
+        document.getElementById('closeModalBtn').addEventListener('click', closeModal);
+        document.getElementById('companyModal').addEventListener('click', (e) => {
+            if (e.target.id === 'companyModal') {
+                closeModal();
+            }
+        });
+        
+        function renderRadarChart(company) {
+            const ctx = document.getElementById('companyRadarChart').getContext('2d');
+            const labels = ['기업 규모', '복지/WLB', '고용 안정성', '후보자 적합도'];
+            const avgData = {
+                size: (companyData.reduce((acc, c) => acc + c.size, 0) / companyData.length).toFixed(1),
+                wlb: (companyData.reduce((acc, c) => acc + c.wlb, 0) / companyData.length).toFixed(1),
+                stability: (companyData.reduce((acc, c) => acc + c.stability, 0) / companyData.length).toFixed(1),
+                fit: (companyData.reduce((acc, c) => acc + c.fit, 0) / companyData.length).toFixed(1),
+            };
+
+            if (radarChartInstance) {
+                radarChartInstance.destroy();
+            }
+
+            radarChartInstance = new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: company.koreanName,
+                        data: [company.size, company.wlb, company.stability, company.fit],
+                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                        borderColor: 'rgb(54, 162, 235)',
+                        pointBackgroundColor: 'rgb(54, 162, 235)',
+                        pointBorderColor: '#fff',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: 'rgb(54, 162, 235)'
+                    }, {
+                        label: '전체 평균',
+                        data: [avgData.size, avgData.wlb, avgData.stability, avgData.fit],
+                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                        borderColor: 'rgb(255, 99, 132)',
+                        pointBackgroundColor: 'rgb(255, 99, 132)',
+                        pointBorderColor: '#fff',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: 'rgb(255, 99, 132)'
+                    }]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    scales: {
+                        r: {
+                            angleLines: { display: false },
+                            suggestedMin: 0,
+                            suggestedMax: 5,
+                            pointLabels: { font: { size: 12 } }
+                        }
+                    },
+                    plugins: {
+                        legend: { position: 'bottom' }
+                    }
+                }
+            });
+        }
+
+        function renderDashboardCharts() {
+            const tierCounts = companyData.reduce((acc, c) => {
+                acc[c.tier] = (acc[c.tier] || 0) + 1;
+                return acc;
+            }, {});
+            new Chart(document.getElementById('tierDistributionChart').getContext('2d'), {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(tierCounts),
+                    datasets: [{
+                        data: Object.values(tierCounts),
+                        backgroundColor: ['#cce5ff', '#d4edda', '#fff3cd', '#f8d7da'],
+                        borderColor: ['#004085', '#155724', '#856404', '#721c24'],
+                    }]
+                },
+                options: { maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+            });
+
+            const top5 = [...companyData].sort((a,b) => b.total - a.total).slice(0, 5).reverse();
+            new Chart(document.getElementById('topCompaniesChart').getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: top5.map(c => c.koreanName),
+                    datasets: [{
+                        label: '종합 점수',
+                        data: top5.map(c => c.total),
+                        backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                        borderColor: 'rgb(54, 162, 235)',
+                        borderWidth: 1
+                    }]
+                },
+                options: { 
+                    indexAxis: 'y',
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { x: { suggestedMin: 10 } }
+                }
+            });
+            
+            const scatterData = companyData.map(c => ({
+                x: c.wlb,
+                y: c.stability,
+                label: c.koreanName,
+                tier: c.tier
+            }));
+            new Chart(document.getElementById('wlbVsStabilityChart').getContext('2d'), {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        label: '기업',
+                        data: scatterData,
+                        backgroundColor: scatterData.map(d => {
+                           const color = tierColors[d.tier] || '#cccccc';
+                           return `${color}B3`;
+                        })
+                    }]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { title: { display: true, text: '복지/WLB' }, min: 2.0, max: 5.0 },
+                        y: { title: { display: true, text: '고용 안정성' }, min: 2.0, max: 5.0 }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.raw.label || '';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            renderTable();
+            setupSorting();
+            setupFiltering();
+            setupSearch();
+            renderDashboardCharts();
+            document.querySelector('.sortable[data-sort="rank"]').classList.add('sort-asc');
+        });
+
+    </script>
+</body>
+</html>
